@@ -1,0 +1,78 @@
+# === 敏感信息（绝不提交） ===
+.env
+*.key
+*.pem
+token_*.txt
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# === 虚拟环境 ===
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+*.sublime-*
+
+# === 操作系统 ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === 日志 ===
+logs/*
+!logs/.gitkeep
+
+# === 数据缓存 ===
+data_cache/
+*.db
+*.sqlite
+*.sqlite3
+
+# === 回测结果 ===
+backtest/results/
+backtest/reports/
+
+# === Jupyter ===
+.ipynb_checkpoints/
+*.ipynb
+
+# === 测试覆盖率 ===
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
+# === 上传文件 ===
+.uploads/
