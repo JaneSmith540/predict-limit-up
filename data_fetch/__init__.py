@@ -47,6 +47,21 @@ class TushareAPI:
         """获取龙虎榜"""
         return self.api.top_list(trade_date=trade_date)
 
+    def get_daily_all(self, trade_date: str) -> pd.DataFrame:
+        """获取某天全市场所有股票的日线数据"""
+        df = self.api.daily(trade_date=trade_date)
+        return df
+
+    def get_limit_list_range(self, start_date: str, end_date: str) -> pd.DataFrame:
+        """获取一段时间内的所有涨停记录"""
+        df = self.api.limit_list_d(start_date=start_date, end_date=end_date)
+        return df
+
+    def get_trade_cal(self, start_date: str, end_date: str) -> list:
+        """获取交易日历"""
+        df = self.api.trade_cal(exchange="SSE", start_date=start_date, end_date=end_date)
+        return sorted(df[df["is_open"] == 1]["cal_date"].tolist())
+
 
 # 全局实例
 data = TushareAPI()

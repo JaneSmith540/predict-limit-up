@@ -8,8 +8,8 @@ import yaml
 from dotenv import load_dotenv
 from loguru import logger
 
-# 项目根目录
-PROJECT_ROOT = Path(__file__).parent
+# 项目根目录（utils 的上一级）
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # 加载 .env
 load_dotenv(PROJECT_ROOT / ".env")

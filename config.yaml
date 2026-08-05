@@ -7,10 +7,16 @@
 tushare:
   api_url: "https://api.tushare.pro"
 
-# 回测时间范围
+# 回测时间范围（回测期间：最近1年；训练数据会自动取回测期前3年）
 backtest:
-  start_date: "20200101"
+  start_date: "20250801"
   end_date: "20260804"
+  # 训练数据起始日期（往前取更长的数据训练，增加涨停样本）
+  train_start_date: "20240101"
+  # 股票池：每天选预测概率最高的 N 只股票买入
+  daily_pick: 3
+  # 每只股票最大持仓天数
+  max_positions: 3
 
 # 因子列表（搭档在这里添加新因子名称即可）
 # 当前只有 MA5 和 MA10，搭档可以继续加
@@ -23,7 +29,8 @@ model:
   # 训练/测试集划分比例
   train_ratio: 0.8
   # 预测概率阈值：预测值 > 此阈值视为"预测涨停"
-  predict_threshold: 0.5
+  # 涨停是低概率事件，线性回归输出值偏低，阈值要低一些
+  predict_threshold: 0.05
 
 # 交易规则
 trading:

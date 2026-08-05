@@ -1,9 +1,6 @@
 """
 因子模块
 
-=== 搭档看这里 ===
-当前已有因子: MA5、MA10
-你要做的:
   1. 在 config.yaml 的 factors 列表里加上你的因子名
   2. 在下面 compute_factors() 里加上你的因子计算
   3. 因子值加入返回的 DataFrame 即可，模型会自动读取
@@ -22,7 +19,7 @@ def compute_factors(df: pd.DataFrame) -> pd.DataFrame:
     输出: 在原 DataFrame 上添加因子列后返回
 
     ============================================================
-    ★ 搭档在这里加新因子 ★
+    ★ 在这里加新因子 ★
     ------------------------------------------------------------
     示例: 加一个 RSI 因子
       1. config.yaml factors 列表加 rsi
@@ -35,7 +32,7 @@ def compute_factors(df: pd.DataFrame) -> pd.DataFrame:
     # --- MA10: 10日均线 ---
     df["ma10"] = df["close"].rolling(window=10).mean()
 
-    # ★ 搭档在这里继续加因子 ★
+    # ★ 在这里加新因子 ★
 
     return df
 

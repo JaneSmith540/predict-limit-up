@@ -31,13 +31,3 @@ predict_limit-up/
 └── logs/                # 输出日志和收益曲线
 ```
 
-## 搭档要做什么
-
-在 `factors/__init__.py` 里加因子。当前只有 MA5 和 MA10，你可以加 RSI、MACD、成交量等。
-
-步骤：
-1. 在 `config.yaml` 的 `factors` 列表加上因子名
-2. 在 `factors/__init__.py` 的 `compute_factors()` 里加计算逻辑
-3. 在 `factors/__init__.py` 的 `get_factor_columns()` 里加上因子列名
-
-模型和回测会自动读取新因子，不需要改其他代码。
