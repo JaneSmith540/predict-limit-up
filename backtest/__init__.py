@@ -1,12 +1,20 @@
 """
-全市场回测引擎
+全市场回测引擎（无未来函数）
 
 流程:
-  1. 获取回测期间的交易日历
+  1. 获取回测期间的交易日历（含预热期）
   2. 收集训练用的涨停样本（训练期内有过涨停的股票历史数据）
-  3. 训练多元线性回归模型
-  4. 逐日回测: 每天全市场扫描 → 模型预测 → 选 top N 买入 → 持仓检查 → 卖出
+  3. 训练多元线性回归模型（因子已 shift(1) 滞后，标签为当日涨停）
+  4. 逐日回测:
+     a. 获取当日全市场行情
+     b. 执行昨日挂单（次日开盘价成交）
+     c. 用最近N天历史数据计算rolling因子（按股票分组）
+     d. 用当日收盘价检查持仓止损/止盈/到期 → 生成次日卖单
+     e. 模型预测全市场 → 选top N → 生成次日买单
+     f. 记录每日净值
   5. 输出收益曲线和统计指标
+
+交易时序: t日收盘信号 → t+1日开盘成交（杜绝当日信号当日交易）
 
 用法:
   python -m backtest run              # 全市场回测（最近1年）
@@ -49,18 +57,22 @@ def _run_market():
     train_start = get_config("backtest.train_start_date", "20240101")
     daily_pick = get_config("backtest.daily_pick", 3)
     max_positions = get_config("backtest.max_positions", 3)
+    warmup_days = 20
 
     log.info("=" * 60)
-    log.info("全市场涨停预测回测")
+    log.info("全市场涨停预测回测（无未来函数）")
     log.info(f"  训练数据: {train_start} ~ {bt_start}")
     log.info(f"  回测期间: {bt_start} ~ {bt_end}")
     log.info(f"  每日选股: {daily_pick} | 最大持仓数: {max_positions}")
+    log.info(f"  交易时序: t日收盘信号 → t+1日开盘成交")
     log.info("=" * 60)
 
-    # 1. 获取交易日历
+    # 1. 获取交易日历（含预热期）
     log.info("获取交易日历...")
+    pre_days = data.get_trade_cal(train_start, bt_start)
+    warmup_trade_days = [d for d in pre_days if d < bt_start][-warmup_days:]
     trade_days = data.get_trade_cal(bt_start, bt_end)
-    log.info(f"回测交易日数: {len(trade_days)}")
+    log.info(f"预热天数: {len(warmup_trade_days)} | 回测交易日数: {len(trade_days)}")
 
     # 2. 收集训练数据：取训练期内有过涨停的股票
     log.info("收集训练用涨停股票...")
@@ -75,7 +87,6 @@ def _run_market():
         try:
             df = data.get_daily(code, train_start, bt_start)
             df = compute_factors(df)
-            df["ts_code"] = code
             train_data.append(df)
         except Exception as e:
             log.debug(f"跳过 {code}: {e}")
@@ -90,106 +101,136 @@ def _run_market():
     metrics = model.train(train_df)
     log.info(f"训练完成 | 准确率: {metrics['accuracy']:.2%}")
 
-    # 5. 逐日回测
+    # 5. 预热：下载回测前的历史数据（用于计算rolling因子）
+    log.info(f"下载预热数据（{len(warmup_trade_days)}天）...")
+    data_history = {}
+    for d in warmup_trade_days:
+        try:
+            data_history[d] = data.get_daily_all(d)
+        except Exception as e:
+            log.debug(f"跳过预热日 {d}: {e}")
+
+    # 6. 逐日回测
     log.info("开始全市场逐日回测...")
     strategy = Strategy()
     capital = strategy.initial_capital
-    positions = {}  # {ts_code: position_dict}
+    positions = {}
     trades = []
     equity_curve = []
+    pending_buys = []
+    pending_sells = []
 
     for day_idx, trade_date in enumerate(trade_days):
-        # 5a. 获取当天全市场行情
+        # --- A. 获取当日全市场行情 ---
         try:
-            market_data = data.get_daily_all(trade_date)
+            today_data = data.get_daily_all(trade_date)
         except Exception as e:
             log.warning(f"获取{trade_date}数据失败: {e}")
             continue
-
-        if market_data is None or len(market_data) == 0:
+        if today_data is None or len(today_data) == 0:
             continue
+        data_history[trade_date] = today_data
 
-        # 5b. 计算因子（全市场）
-        market_data = compute_factors(market_data)
+        # --- B. 执行昨日挂单：次日开盘价成交 ---
+        # 先卖后买，释放资金
+        for sell in pending_sells:
+            code = sell["ts_code"]
+            if code not in positions:
+                continue
+            pos = positions[code]
+            stock_row = today_data[today_data["ts_code"] == code]
+            if len(stock_row) == 0:
+                continue
+            sell_price = stock_row.iloc[0]["open"]
+            pnl = (sell_price - pos["cost_price"]) / pos["cost_price"]
+            capital += pos["shares"] * sell_price
+            trades.append({
+                "ts_code": code,
+                "buy_date": pos["buy_date"],
+                "sell_date": trade_date,
+                "buy_price": pos["cost_price"],
+                "sell_price": sell_price,
+                "shares": pos["shares"],
+                "pnl": pnl,
+                "reason": sell["reason"],
+            })
+            log.info(f"[{trade_date}] 卖出 {code} @ {sell_price:.2f} (开盘) | {sell['reason']} | {pnl:.1%}")
+            del positions[code]
+        pending_sells = []
 
-        # 5c. 检查持仓 → 是否卖出
-        to_remove = []
-        for code, pos in positions.items():
+        slots = max_positions - len(positions)
+        if slots > 0:
+            for signal in pending_buys[:slots]:
+                code = signal["ts_code"]
+                if code in positions:
+                    continue
+                stock_row = today_data[today_data["ts_code"] == code]
+                if len(stock_row) == 0:
+                    continue
+                buy_price = stock_row.iloc[0]["open"]
+                buy_amount = capital * strategy.position_size
+                shares = int(buy_amount / buy_price / 100) * 100
+                if shares < 100:
+                    continue
+                capital -= shares * buy_price
+                positions[code] = {
+                    "shares": shares,
+                    "cost_price": buy_price,
+                    "buy_date": trade_date,
+                    "holding_days": 0,
+                }
+                log.info(f"[{trade_date}] 买入 {code} @ {buy_price:.2f} (开盘) | {shares}股 | 概率: {signal['prob']:.4f}")
+        pending_buys = []
+
+        # --- C. 计算因子（用最近N天历史数据，按股票分组rolling） ---
+        recent_dates = sorted(data_history.keys())[-warmup_days:]
+        combined = pd.concat([data_history[d] for d in recent_dates], ignore_index=True)
+        combined = compute_factors(combined)
+        market_data = combined.sort_values(["ts_code", "trade_date"]).groupby("ts_code").tail(1).reset_index(drop=True)
+
+        # --- D. 检查持仓：用当日收盘价判断止损/止盈/到期 → 次日开盘卖 ---
+        for code, pos in list(positions.items()):
+            pos["holding_days"] += 1
             stock_row = market_data[market_data["ts_code"] == code]
             if len(stock_row) == 0:
-                pos["holding_days"] += 1
                 continue
             current_price = stock_row.iloc[0]["close"]
             should_sell, reason = strategy.should_sell(pos, current_price)
             if should_sell:
-                pnl = (current_price - pos["cost_price"]) / pos["cost_price"]
-                capital += pos["shares"] * current_price
-                trades.append({
-                    "ts_code": code,
-                    "buy_date": pos["buy_date"],
-                    "sell_date": trade_date,
-                    "buy_price": pos["cost_price"],
-                    "sell_price": current_price,
-                    "shares": pos["shares"],
-                    "pnl": pnl,
-                    "reason": reason,
-                })
-                log.info(f"[{trade_date}] 卖出 {code} @ {current_price:.2f} | {reason} | {pnl:.1%}")
-                to_remove.append(code)
-            else:
-                pos["holding_days"] += 1
-        for code in to_remove:
-            del positions[code]
+                pending_sells.append({"ts_code": code, "reason": reason})
 
-        # 5d. 模型预测全市场
+        # --- E. 模型预测：因子基于t-1及更早数据，预测当日涨停 → 次日开盘买 ---
         valid_data = market_data.dropna(subset=get_factor_columns())
-        if len(valid_data) == 0:
-            continue
-        probs = model.predict(valid_data)
-        valid_data = valid_data.copy()
-        valid_data["prob"] = probs
-
-        # 5e. 选预测概率最高的 N 只
-        top_n = valid_data.nlargest(daily_pick, "prob")
-
-        # 5f. 买入（有空位才买）
-        slots = max_positions - len(positions)
-        if slots <= 0:
-            pass
+        if len(valid_data) > 0:
+            probs = model.predict(valid_data)
+            valid_data = valid_data.copy()
+            valid_data["prob"] = probs
+            top_n = valid_data.nlargest(daily_pick, "prob")
+            pending_buys = [{"ts_code": r["ts_code"], "prob": r["prob"]} for _, r in top_n.iterrows()]
         else:
-            for _, row in top_n.head(slots).iterrows():
-                code = row["ts_code"]
-                if code in positions:
-                    continue
-                current_price = row["close"]
-                buy_amount = capital * strategy.position_size
-                shares = int(buy_amount / current_price / 100) * 100
-                if shares < 100:
-                    continue
-                capital -= shares * current_price
-                positions[code] = {
-                    "shares": shares,
-                    "cost_price": current_price,
-                    "buy_date": trade_date,
-                    "holding_days": 0,
-                }
-                log.info(f"[{trade_date}] 买入 {code} @ {current_price:.2f} | {shares}股 | 概率: {row['prob']:.4f}")
+            pending_buys = []
 
-        # 5g. 记录每日净值
-        position_value = sum(
-            p["shares"] * market_data[market_data["ts_code"] == c].iloc[0]["close"]
-            for c, p in positions.items()
-            if len(market_data[market_data["ts_code"] == c]) > 0
-        )
+        # --- F. 记录每日净值 ---
+        position_value = 0
+        for code, pos in positions.items():
+            stock_row = market_data[market_data["ts_code"] == code]
+            if len(stock_row) > 0:
+                position_value += pos["shares"] * stock_row.iloc[0]["close"]
         equity = capital + position_value
         equity_curve.append({"date": trade_date, "equity": equity})
+
+        # 清理过期数据（只保留最近warmup_days天）
+        if len(data_history) > warmup_days:
+            old_dates = sorted(data_history.keys())[:-warmup_days]
+            for d in old_dates:
+                del data_history[d]
 
         if (day_idx + 1) % 20 == 0:
             log.info(f"  回测进度: {day_idx+1}/{len(trade_days)} | 净值: {equity:,.0f} | 持仓: {len(positions)}")
 
-    # 6. 回测结束，平仓所有持仓
+    # 7. 回测结束，平仓所有持仓（按最后一天收盘价）
     last_date = trade_days[-1]
-    last_data = data.get_daily_all(last_date)
+    last_data = data_history.get(last_date, today_data)
     for code, pos in list(positions.items()):
         stock_row = last_data[last_data["ts_code"] == code]
         if len(stock_row) > 0:
@@ -208,7 +249,7 @@ def _run_market():
             })
     positions.clear()
 
-    # 7. 输出结果
+    # 8. 输出结果
     _print_results("全市场", trades, equity_curve, strategy.initial_capital)
     _plot_equity_curve("全市场", equity_curve, strategy.initial_capital)
 
@@ -251,6 +292,9 @@ def _run_single(ts_code: str):
     position = None
     trades = []
     equity_curve = []
+    pending_buy = False
+    pending_sell = False
+    sell_reason = ""
 
     for i in range(len(test_df)):
         row = test_df.iloc[i]
@@ -258,39 +302,50 @@ def _run_single(ts_code: str):
         current_date = row["trade_date"]
         prob = row["prob"]
 
-        if position is not None:
-            should_sell, reason = strategy.should_sell(position, current_price)
-            if should_sell:
-                pnl = (current_price - position["cost_price"]) / position["cost_price"]
-                capital += position["shares"] * current_price
-                trades.append({
-                    "buy_date": position["buy_date"],
-                    "sell_date": current_date,
-                    "buy_price": position["cost_price"],
-                    "sell_price": current_price,
-                    "shares": position["shares"],
-                    "pnl": pnl,
-                    "reason": reason,
-                })
-                log.info(f"卖出 {current_date} @ {current_price:.2f} | {reason} | {pnl:.1%}")
-                position = None
+        # --- 执行昨日挂单：今日开盘成交 ---
+        if pending_sell and position is not None:
+            sell_price = row["open"]
+            pnl = (sell_price - position["cost_price"]) / position["cost_price"]
+            capital += position["shares"] * sell_price
+            trades.append({
+                "buy_date": position["buy_date"],
+                "sell_date": current_date,
+                "buy_price": position["cost_price"],
+                "sell_price": sell_price,
+                "shares": position["shares"],
+                "pnl": pnl,
+                "reason": sell_reason,
+            })
+            log.info(f"卖出 {current_date} @ {sell_price:.2f} (开盘) | {sell_reason} | {pnl:.1%}")
+            position = None
+            pending_sell = False
 
-        if position is None:
-            if strategy.should_buy(prob, threshold):
-                buy_amount = capital * strategy.position_size
-                shares = int(buy_amount / current_price / 100) * 100
-                if shares > 0:
-                    capital -= shares * current_price
-                    position = {
-                        "shares": shares,
-                        "cost_price": current_price,
-                        "buy_date": current_date,
-                        "holding_days": 0,
-                    }
-                    log.info(f"买入 {current_date} @ {current_price:.2f} | {shares}股 | 概率: {prob:.2f}")
+        if pending_buy and position is None:
+            buy_price = row["open"]
+            buy_amount = capital * strategy.position_size
+            shares = int(buy_amount / buy_price / 100) * 100
+            if shares > 0:
+                capital -= shares * buy_price
+                position = {
+                    "shares": shares,
+                    "cost_price": buy_price,
+                    "buy_date": current_date,
+                    "holding_days": 0,
+                }
+                log.info(f"买入 {current_date} @ {buy_price:.2f} (开盘) | {shares}股 | 概率: {prob:.2f}")
+            pending_buy = False
 
+        # --- 用当日收盘价检查止损/止盈/到期 → 次日开盘卖 ---
         if position is not None:
             position["holding_days"] += 1
+            should_sell, reason = strategy.should_sell(position, current_price)
+            if should_sell:
+                pending_sell = True
+                sell_reason = reason
+
+        # --- 用当日因子（基于t-1数据）预测 → 次日开盘买 ---
+        if position is None and strategy.should_buy(prob, threshold):
+            pending_buy = True
 
         position_value = position["shares"] * current_price if position else 0
         equity = capital + position_value

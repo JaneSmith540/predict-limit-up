@@ -33,20 +33,17 @@ class LimitUpModel:
         """
         准备训练数据
 
-        X = 当日因子值
-        Y = 次日是否涨停（涨幅>=9.5% 标记为1）
+        X = t-1 日因子值（已在 compute_factors 中 shift(1) 滞后）
+        Y = t 日是否涨停（pct_chg >= 9.5%）
         """
-        # 计算次日涨幅
         df = df.copy()
-        df["next_close"] = df["close"].shift(-1)
-        df["next_return"] = (df["next_close"] - df["close"]) / df["close"]
-        # 涨停标记: 次日涨幅 >= 9.5%
-        df["label"] = (df["next_return"] >= 0.095).astype(int)
+        # 标签: 当日涨停（pct_chg >= 9.5%）
+        if "pct_chg" in df.columns:
+            df["label"] = (df["pct_chg"] >= 9.5).astype(int)
+        else:
+            df["label"] = ((df["close"] - df["pre_close"]) / df["pre_close"] >= 0.095).astype(int)
 
-        # 去掉最后一天（没有次日数据）
-        df = df.dropna(subset=["next_close"])
-
-        # 提取特征和标签
+        # 因子已在 compute_factors 中 shift(1)，此处直接使用
         X = df[self.factor_cols].dropna()
         Y = df.loc[X.index, "label"]
 
@@ -100,16 +97,18 @@ class LimitUpModel:
 
         输入: 含因子列的 DataFrame
         输出: 涨停概率数组（0~1之间，越大约可能涨停）
+              NaN 因子行概率为 0
         """
         if self.model is None:
             self.load()
 
-        X = df[self.factor_cols].dropna()
-        raw = self.model.predict(X)
-
-        # 线性回归输出可能超出 0~1，用 clip 限制
-        prob = np.clip(raw, 0, 1)
-        return prob
+        X = df[self.factor_cols]
+        probs = np.zeros(len(df))
+        valid_mask = X.notna().all(axis=1)
+        if valid_mask.any():
+            raw = self.model.predict(X[valid_mask])
+            probs[valid_mask.values] = np.clip(raw, 0, 1)
+        return probs
 
     def predict_signal(self, df: pd.DataFrame) -> pd.Series:
         """预测并返回交易信号: True=预测涨停"""

@@ -21,7 +21,7 @@ class TushareAPI:
         log.info("Tushare API 初始化成功")
 
     def get_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """获取日线行情（前复权）"""
+        """获取日线行情（不复权 — 避免前复权数据的隐性未来信息泄漏）"""
         df = self.api.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
         df = df.sort_values("trade_date").reset_index(drop=True)
         return df
@@ -48,7 +48,7 @@ class TushareAPI:
         return self.api.top_list(trade_date=trade_date)
 
     def get_daily_all(self, trade_date: str) -> pd.DataFrame:
-        """获取某天全市场所有股票的日线数据"""
+        """获取某天全市场所有股票的日线数据（不复权）"""
         df = self.api.daily(trade_date=trade_date)
         return df
 

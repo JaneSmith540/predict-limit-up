@@ -15,22 +15,28 @@ def compute_factors(df: pd.DataFrame) -> pd.DataFrame:
     """
     计算所有因子
 
-    输入: 日线数据（含 close 列）
+    输入: 日线数据（含 close, ts_code, trade_date 列）
     输出: 在原 DataFrame 上添加因子列后返回
+
+    所有 rolling 因子后接 .shift(1)，确保因子只使用 t-1 及更早数据，
+    不偷看当日收盘。多股票时按 ts_code 分组 rolling。
 
     ============================================================
     ★ 在这里加新因子 ★
     ------------------------------------------------------------
     示例: 加一个 RSI 因子
       1. config.yaml factors 列表加 rsi
-      2. 这里加: df['rsi'] = compute_rsi(df['close'], 14)
+      2. 这里加: df['rsi'] = df.groupby('ts_code')['close'].transform(lambda s: compute_rsi(s, 14).shift(1))
     ============================================================
     """
-    # --- MA5: 5日均线 ---
-    df["ma5"] = df["close"].rolling(window=5).mean()
-
-    # --- MA10: 10日均线 ---
-    df["ma10"] = df["close"].rolling(window=10).mean()
+    if "ts_code" in df.columns:
+        df = df.sort_values(["ts_code", "trade_date"]).reset_index(drop=True)
+        grp = df.groupby("ts_code")["close"]
+        df["ma5"] = grp.transform(lambda s: s.rolling(window=5).mean().shift(1))
+        df["ma10"] = grp.transform(lambda s: s.rolling(window=10).mean().shift(1))
+    else:
+        df["ma5"] = df["close"].rolling(window=5).mean().shift(1)
+        df["ma10"] = df["close"].rolling(window=10).mean().shift(1)
 
     # ★ 在这里加新因子 ★
 
