@@ -1,8 +1,8 @@
 """回测入口
 
 用法:
-  python -m backtest run              # 全市场回测（最近1年）
-  python -m backtest run 000001.SZ     # 单股回测
+  python -m backtest run              # 全市场回测（vn.py 引擎）
+  python -m backtest run 000001.SZ     # 单股回测（兼容旧版）
 """
 import sys
 from backtest import run_backtest
@@ -13,5 +13,5 @@ if __name__ == "__main__":
         run_backtest(ts_code)
     else:
         print("用法:")
-        print("  python -m backtest run              # 全市场回测")
-        print("  python -m backtest run 000001.SZ     # 单股回测")
+        print("  python -m backtest run              # 全市场回测（vn.py 引擎）")
+        print("  python -m backtest run 000001.SZ     # 单股回测（兼容旧版）")

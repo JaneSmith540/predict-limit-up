@@ -6,3 +6,5 @@ PyYAML>=6.0
 python-dotenv>=1.0.0
 loguru>=0.6.0
 matplotlib>=3.6.0
+vnpy>=4.4.0
+vnpy-portfoliostrategy>=1.3.0

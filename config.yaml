@@ -7,7 +7,7 @@
 tushare:
   api_url: "https://api.tushare.pro"
 
-# 回测时间范围（回测期间：最近1年；训练数据会自动取回测期前3年）
+# 回测时间范围（回测期间：最近1年；训练数据会自动取回测期前的数据）
 backtest:
   start_date: "20250801"
   end_date: "20260804"
@@ -15,8 +15,25 @@ backtest:
   train_start_date: "20240101"
   # 股票池：每天选预测概率最高的 N 只股票买入
   daily_pick: 3
-  # 每只股票最大持仓天数
+  # 同时最多持仓数
   max_positions: 3
+  # 预热天数（MA 因子需要历史数据）
+  warmup_days: 20
+
+# vn.py 回测引擎参数
+vnpy:
+  # 手续费率（单边万分之三）
+  rate: 0.0003
+  # 滑点（元/股，0 表示无滑点）
+  slippage: 0.0
+  # 合约乘数（股票为 1）
+  size: 1.0
+  # 最小价格跳动（A 股 0.01 元）
+  pricetick: 0.01
+  # 无风险利率
+  risk_free: 0.0
+  # 年化天数
+  annual_days: 240
 
 # 因子列表（搭档在这里添加新因子名称即可）
 # 当前只有 MA5 和 MA10，搭档可以继续加
