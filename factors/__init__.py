@@ -9,7 +9,7 @@
 """
 import pandas as pd
 import numpy as np
-
+from .factor import calculate_factors
 
 def compute_factors(df: pd.DataFrame) -> pd.DataFrame:
     """
