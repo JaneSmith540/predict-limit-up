@@ -109,6 +109,32 @@ def _run_market():
     _save_trades(engine, "全市场")
     _plot_equity_curve(engine, "全市场", initial_capital)
 
+    # --- 11. 生成独立静态可视化报告（不参与交易逻辑） ---
+    try:
+        from visualization import generate_market_report
+
+        report_dir = generate_market_report(
+            engine,
+            statistics=stats,
+            name="全市场",
+            parameters={
+                "backtest_start": bt_start,
+                "backtest_end": bt_end,
+                "train_start": train_start,
+                "daily_pick": daily_pick,
+                "max_positions": max_positions,
+                "initial_capital": initial_capital,
+                "position_size": position_size,
+                "stop_loss": stop_loss,
+                "take_profit": take_profit,
+                "max_holding_days": max_holding_days,
+                "annual_days": getattr(engine, "annual_days", 240),
+            },
+        )
+        log.info(f"静态可视化报告已生成: {report_dir}")
+    except Exception as exc:
+        log.exception(f"静态可视化报告生成失败（不影响回测结果）: {exc}")
+
     return engine
 
 
@@ -308,6 +334,28 @@ def _run_single(ts_code: str):
 
     _print_single_results(ts_code, trades, equity_curve, strategy.initial_capital)
     _plot_single_equity(ts_code, equity_curve, strategy.initial_capital)
+    try:
+        from visualization import generate_single_report
+
+        report_dir = generate_single_report(
+            ts_code=ts_code,
+            trades=trades,
+            equity_curve=equity_curve,
+            initial_capital=strategy.initial_capital,
+            parameters={
+                "backtest_start": bt_start,
+                "backtest_end": bt_end,
+                "train_start": train_start,
+                "initial_capital": strategy.initial_capital,
+                "position_size": strategy.position_size,
+                "stop_loss": strategy.stop_loss,
+                "take_profit": strategy.take_profit,
+                "max_holding_days": strategy.max_holding_days,
+            },
+        )
+        log.info(f"静态可视化报告已生成: {report_dir}")
+    except Exception as exc:
+        log.exception(f"静态可视化报告生成失败（不影响回测结果）: {exc}")
     return trades, equity_curve
 
 
