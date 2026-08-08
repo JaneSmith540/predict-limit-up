@@ -91,7 +91,7 @@ def _run_market():
 
     # --- 11. 可视化报告 ---
     try:
-        from visualization import generate_market_report
+        from visualization.report import generate_market_report
         generate_market_report(
             engine, statistics=stats, name="全市场",
             parameters={

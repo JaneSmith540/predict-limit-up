@@ -2,86 +2,129 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>V1 最终版回测报告</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>V1 涨停预测策略 - 回测报告</title>
 <style>
-body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
-.container { max-width: 1200px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-h1 { color: #2F5496; border-bottom: 3px solid #2F5496; padding-bottom: 10px; }
-h2 { color: #2F5496; margin-top: 30px; }
-table { border-collapse: collapse; width: 100%; margin: 15px 0; }
-th, td { border: 1px solid #ddd; padding: 10px 15px; text-align: left; }
-th { background: #2F5496; color: white; font-weight: bold; }
-tr:nth-child(even) { background: #f8f9fa; }
-.metric-value { font-weight: bold; font-size: 1.1em; }
-.positive { color: #27ae60; }
-.negative { color: #e74c3c; }
-img { width: 100%; max-width: 1100px; margin: 15px 0; border-radius: 4px; box-shadow: 0 1px 5px rgba(0,0,0,0.1); }
-.stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin: 20px 0; }
-.stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
-.stat-card .value { font-size: 1.8em; font-weight: bold; margin: 5px 0; }
-.stat-card .label { font-size: 0.85em; opacity: 0.9; }
+  body { font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif; margin: 0; padding: 20px; background: #f0f2f5; }
+  .container { max-width: 1200px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+  h1 { color: #1a365d; text-align: center; border-bottom: 3px solid #2b6cb0; padding-bottom: 15px; }
+  h2 { color: #2b6cb0; margin-top: 30px; }
+  .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
+  .metric-card { background: #f7fafc; border-left: 4px solid #2b6cb0; padding: 15px; border-radius: 5px; }
+  .metric-card .label { color: #718096; font-size: 13px; }
+  .metric-card .value { font-size: 24px; font-weight: bold; color: #1a365d; margin-top: 5px; }
+  .metric-card.positive .value { color: #2f855a; }
+  .metric-card.negative .value { color: #c53030; }
+  table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+  th, td { padding: 10px 15px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+  th { background: #2b6cb0; color: white; }
+  tr:nth-child(even) { background: #f7fafc; }
+  .chart { margin: 20px 0; text-align: center; }
+  .chart img { max-width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .chart .caption { color: #718096; font-size: 14px; margin-top: 8px; }
 </style>
 </head>
 <body>
 <div class="container">
-<h1>V1 最终版回测报告 — 涨停预测策略</h1>
+<h1>V1 涨停预测策略 - 回测报告</h1>
+<p style="text-align:center; color:#718096;">生成时间: 2026-08-08 12:17 | 回测区间: 2025-07-14 ~ 2026-08-04</p>
 
-<div class="stats-grid">
-<div class="stat-card"><div class="value">19.56%</div><div class="label">年化收益</div></div>
-<div class="stat-card"><div class="value">21.02%</div><div class="label">总收益</div></div>
-<div class="stat-card"><div class="value">-34.01%</div><div class="label">最大回撤</div></div>
-<div class="stat-card"><div class="value">293</div><div class="label">交易次数</div></div>
-<div class="stat-card"><div class="value">0.59</div><div class="label">Sharpe</div></div>
+<h2>核心指标</h2>
+<div class="metrics-grid">
+  <div class="metric-card positive">
+    <div class="label">年化收益率</div>
+    <div class="value">47.39%</div>
+  </div>
+  <div class="metric-card positive">
+    <div class="label">总收益率</div>
+    <div class="value">50.94%</div>
+  </div>
+  <div class="metric-card negative">
+    <div class="label">最大回撤</div>
+    <div class="value">-23.44%</div>
+  </div>
+  <div class="metric-card">
+    <div class="label">Sharpe 比率</div>
+    <div class="value">1.59</div>
+  </div>
+  <div class="metric-card">
+    <div class="label">总交易次数</div>
+    <div class="value">438</div>
+  </div>
+  <div class="metric-card">
+    <div class="label">胜率</div>
+    <div class="value">47.1%</div>
+  </div>
+  <div class="metric-card">
+    <div class="label">盈亏比</div>
+    <div class="value">1.26</div>
+  </div>
+  <div class="metric-card">
+    <div class="label">收益回撤比</div>
+    <div class="value">1.15</div>
+  </div>
 </div>
 
-<h2>策略参数</h2>
+<h2>详细统计</h2>
 <table>
-<tr><th>参数</th><th>值</th></tr>
-<tr><td>模型</td><td>CatBoost + LightGBM + XGBoost (等权集成)</td></tr>
-<tr><td>回测区间</td><td>2025-08-01 ~ 2026-08-04</td></tr>
-<tr><td>训练数据</td><td>2024-01-01 ~ 2025-08-01 (滚动重训)</td></tr>
-<tr><td>初始资金</td><td>1,000,000 CNY</td></tr>
-<tr><td>仓位大小</td><td>33% (分散持仓)</td></tr>
-<tr><td>最大持仓数</td><td>3</td></tr>
-<tr><td>每日选股</td><td>3</td></tr>
-<tr><td>最大持仓天数</td><td>3天</td></tr>
-<tr><td>止损</td><td>-4%</td></tr>
-<tr><td>止盈</td><td>+10%</td></tr>
-<tr><td>预测阈值</td><td>0.40</td></tr>
-<tr><td>标签阈值</td><td>2.0%</td></tr>
-<tr><td>手续费率</td><td>0.03%</td></tr>
-<tr><td>交易时序</td><td>t日收盘信号 -> t+1日开盘成交</td></tr>
-</table>
-
-<h2>因子列表</h2>
-<table>
-<tr><th>因子</th><th>说明</th></tr>
-<tr><td>momentum_5</td><td>5日动量</td></tr>
-<tr><td>momentum_10</td><td>10日动量</td></tr>
-<tr><td>ma5_bias</td><td>MA5乖离率</td></tr>
-<tr><td>ma10_bias</td><td>MA10乖离率</td></tr>
-<tr><td>volatility_5</td><td>5日波动率</td></tr>
-<tr><td>break_high_10</td><td>10日新高突破</td></tr>
-<tr><td>rsi_14</td><td>14日RSI</td></tr>
+  <tr><th>指标</th><th>数值</th></tr>
+  <tr><td>回测区间</td><td>2025-07-14 ~ 2026-08-04</td></tr>
+  <tr><td>初始资金</td><td>¥1,000,000</td></tr>
+  <tr><td>期末资金</td><td>¥1,509,405</td></tr>
+  <tr><td>总收益率</td><td>50.94%</td></tr>
+  <tr><td>年化收益率</td><td>47.39%</td></tr>
+  <tr><td>最大回撤</td><td>-23.44%</td></tr>
+  <tr><td>Sharpe 比率</td><td>1.59</td></tr>
+  <tr><td>收益回撤比</td><td>1.15</td></tr>
+  <tr><td>总交易次数</td><td>438</td></tr>
+  <tr><td>平仓笔数</td><td>206</td></tr>
+  <tr><td>胜率</td><td>47.1%</td></tr>
+  <tr><td>盈亏比</td><td>1.26</td></tr>
+  <tr><td>平均交易收益</td><td>0.59%</td></tr>
+  <tr><td>平均持仓天数</td><td>2.5</td></tr>
+  <tr><td>交易天数</td><td>258</td></tr>
+  <tr><td>盈利天数 / 亏损天数</td><td>135 / 122</td></tr>
+  <tr><td>日均收益率</td><td>0.160%</td></tr>
+  <tr><td>收益率标准差</td><td>1.55%</td></tr>
+  <tr><td>总手续费</td><td>¥43,176</td></tr>
+  <tr><td>总成交额</td><td>¥143,919,221</td></tr>
 </table>
 
 <h2>权益曲线</h2>
-<img src="v1_equity_curve.png" alt="Equity Curve">
+<div class="chart">
+  <img src="v1_equity_curve.png" alt="权益曲线">
+  <div class="caption">V1 策略权益曲线（滚动重训机制）</div>
+</div>
 
 <h2>回撤曲线</h2>
-<img src="v1_drawdown.png" alt="Drawdown">
+<div class="chart">
+  <img src="v1_drawdown.png" alt="回撤曲线">
+  <div class="caption">V1 策略回撤曲线</div>
+</div>
 
 <h2>月度收益</h2>
-<img src="v1_monthly_returns.png" alt="Monthly Returns">
+<div class="chart">
+  <img src="v1_monthly_returns.png" alt="月度收益">
+  <div class="caption">V1 策略月度收益率</div>
+</div>
 
 <h2>交易盈亏分布</h2>
-<img src="v1_trade_pnl.png" alt="Trade P&L">
+<div class="chart">
+  <img src="v1_trade_pnl.png" alt="交易盈亏分布">
+  <div class="caption">交易盈亏分布与累计盈亏</div>
+</div>
 
 <h2>综合仪表板</h2>
-<img src="v1_dashboard.png" alt="Dashboard">
+<div class="chart">
+  <img src="v1_dashboard.png" alt="综合仪表板">
+  <div class="caption">V1 策略回测综合仪表板</div>
+</div>
 
-<h2>统计指标汇总</h2>
-<img src="v1_stats_table.png" alt="Stats Table">
+<h2>统计指标表</h2>
+<div class="chart">
+  <img src="v1_stats_table.png" alt="统计指标表">
+  <div class="caption">V1 回测统计指标表</div>
+</div>
 
 </div>
 </body>

@@ -1,36 +1,35 @@
 {
   "mode": "market",
   "name": "全市场",
-  "generated_at": "2026-08-08T09:37:48",
+  "generated_at": "2026-08-08T12:12:08",
   "annual_days": 240,
   "parameters": {
     "backtest_start": "20250801",
     "backtest_end": "20260804",
     "train_start": "20240101",
-    "daily_pick": 2,
-    "max_positions": 2,
+    "daily_pick": 3,
+    "max_positions": 3,
     "initial_capital": 1000000,
-    "position_size": 0.5,
+    "position_size": 0.33,
     "stop_loss": -0.04,
     "take_profit": 0.1,
-    "max_holding_days": 3,
-    "annual_days": 240
+    "max_holding_days": 3
   },
   "cache_root": "D:\\predict-limit-up\\data_cache\\daily",
   "round_trip": {
     "unmatched_open_lots": 2,
-    "unmatched_close_volume": 0.0
+    "unmatched_close_volume": 109700.0
   },
   "positions": {
-    "missing_price_observations": 421,
+    "missing_price_observations": 1244,
     "forward_filled_price_observations": 0,
-    "fill_price_fallback_observations": 421,
-    "missing_cache_days": 241
+    "fill_price_fallback_observations": 1244,
+    "missing_cache_days": 244
   },
   "boundary": {
     "requested_start": "2025-08-01",
-    "excluded_pre_start_days": 1,
-    "excluded_pre_start_trades": 0
+    "excluded_pre_start_days": 14,
+    "excluded_pre_start_trades": 21
   },
   "benchmarks": {
     "requested": {
