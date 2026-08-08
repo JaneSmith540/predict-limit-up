@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>V1 最终版回测报告</title>
+<style>
+body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+.container { max-width: 1200px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+h1 { color: #2F5496; border-bottom: 3px solid #2F5496; padding-bottom: 10px; }
+h2 { color: #2F5496; margin-top: 30px; }
+table { border-collapse: collapse; width: 100%; margin: 15px 0; }
+th, td { border: 1px solid #ddd; padding: 10px 15px; text-align: left; }
+th { background: #2F5496; color: white; font-weight: bold; }
+tr:nth-child(even) { background: #f8f9fa; }
+.metric-value { font-weight: bold; font-size: 1.1em; }
+.positive { color: #27ae60; }
+.negative { color: #e74c3c; }
+img { width: 100%; max-width: 1100px; margin: 15px 0; border-radius: 4px; box-shadow: 0 1px 5px rgba(0,0,0,0.1); }
+.stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin: 20px 0; }
+.stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
+.stat-card .value { font-size: 1.8em; font-weight: bold; margin: 5px 0; }
+.stat-card .label { font-size: 0.85em; opacity: 0.9; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>V1 最终版回测报告 — 涨停预测策略</h1>
+
+<div class="stats-grid">
+<div class="stat-card"><div class="value">19.56%</div><div class="label">年化收益</div></div>
+<div class="stat-card"><div class="value">21.02%</div><div class="label">总收益</div></div>
+<div class="stat-card"><div class="value">-34.01%</div><div class="label">最大回撤</div></div>
+<div class="stat-card"><div class="value">293</div><div class="label">交易次数</div></div>
+<div class="stat-card"><div class="value">0.59</div><div class="label">Sharpe</div></div>
+</div>
+
+<h2>策略参数</h2>
+<table>
+<tr><th>参数</th><th>值</th></tr>
+<tr><td>模型</td><td>CatBoost + LightGBM + XGBoost (等权集成)</td></tr>
+<tr><td>回测区间</td><td>2025-08-01 ~ 2026-08-04</td></tr>
+<tr><td>训练数据</td><td>2024-01-01 ~ 2025-08-01 (滚动重训)</td></tr>
+<tr><td>初始资金</td><td>1,000,000 CNY</td></tr>
+<tr><td>仓位大小</td><td>33% (分散持仓)</td></tr>
+<tr><td>最大持仓数</td><td>3</td></tr>
+<tr><td>每日选股</td><td>3</td></tr>
+<tr><td>最大持仓天数</td><td>3天</td></tr>
+<tr><td>止损</td><td>-4%</td></tr>
+<tr><td>止盈</td><td>+10%</td></tr>
+<tr><td>预测阈值</td><td>0.40</td></tr>
+<tr><td>标签阈值</td><td>2.0%</td></tr>
+<tr><td>手续费率</td><td>0.03%</td></tr>
+<tr><td>交易时序</td><td>t日收盘信号 -> t+1日开盘成交</td></tr>
+</table>
+
+<h2>因子列表</h2>
+<table>
+<tr><th>因子</th><th>说明</th></tr>
+<tr><td>momentum_5</td><td>5日动量</td></tr>
+<tr><td>momentum_10</td><td>10日动量</td></tr>
+<tr><td>ma5_bias</td><td>MA5乖离率</td></tr>
+<tr><td>ma10_bias</td><td>MA10乖离率</td></tr>
+<tr><td>volatility_5</td><td>5日波动率</td></tr>
+<tr><td>break_high_10</td><td>10日新高突破</td></tr>
+<tr><td>rsi_14</td><td>14日RSI</td></tr>
+</table>
+
+<h2>权益曲线</h2>
+<img src="v1_equity_curve.png" alt="Equity Curve">
+
+<h2>回撤曲线</h2>
+<img src="v1_drawdown.png" alt="Drawdown">
+
+<h2>月度收益</h2>
+<img src="v1_monthly_returns.png" alt="Monthly Returns">
+
+<h2>交易盈亏分布</h2>
+<img src="v1_trade_pnl.png" alt="Trade P&L">
+
+<h2>综合仪表板</h2>
+<img src="v1_dashboard.png" alt="Dashboard">
+
+<h2>统计指标汇总</h2>
+<img src="v1_stats_table.png" alt="Stats Table">
+
+</div>
+</body>
+</html>

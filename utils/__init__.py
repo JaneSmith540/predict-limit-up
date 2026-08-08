@@ -1,51 +1,38 @@
-"""
-工具模块：配置加载 + 日志
-"""
-import os
+import os, logging
 from pathlib import Path
-
 import yaml
-from dotenv import load_dotenv
-from loguru import logger
 
-# 项目根目录（utils 的上一级）
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_env_file = Path(__file__).parent.parent / '.env'
+if _env_file.exists():
+    for line in open(_env_file, encoding='utf-8'):
+        line = line.strip()
+        if line and '=' in line and not line.startswith('#'):
+            k, v = line.split('=', 1)
+            os.environ.setdefault(k.strip(), v.strip())
 
-# 加载 .env
-load_dotenv(PROJECT_ROOT / ".env")
+TUSHARE_TOKEN = os.environ.get('TUSHARE_TOKEN', '')
 
-# 加载 config.yaml
-with open(PROJECT_ROOT / "config.yaml", "r", encoding="utf-8") as f:
-    CONFIG = yaml.safe_load(f)
+log = logging.getLogger('predict_limit_up')
+log.setLevel(logging.INFO)
+if not log.handlers:
+    h = logging.StreamHandler()
+    h.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', '%H:%M:%S'))
+    log.addHandler(h)
 
-# Tushare token（从环境变量读取）
-TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN", "")
+_cfg = None
 
+def _load():
+    global _cfg
+    if _cfg is None:
+        with open(Path(__file__).parent.parent / 'config.yaml', encoding='utf-8') as f:
+            _cfg = yaml.safe_load(f)
+    return _cfg
 
-def get_config(key: str, default=None):
-    """从 config.yaml 读取配置，用点号分隔。例: get_config('trading.position_size')"""
-    value = CONFIG
-    for k in key.split("."):
-        if isinstance(value, dict) and k in value:
-            value = value[k]
+def get_config(key, default=None):
+    val = _load()
+    for p in key.split('.'):
+        if isinstance(val, dict) and p in val:
+            val = val[p]
         else:
             return default
-    return value
-
-
-# 日志配置
-logger.remove()
-logger.add(
-    lambda msg: print(msg, end=""),
-    level=get_config("logging.level", "INFO"),
-    format="{time:HH:mm:ss} | {level:<7} | {message}",
-)
-logger.add(
-    str(PROJECT_ROOT / "logs" / "run.log"),
-    level="DEBUG",
-    rotation="1 day",
-    retention="30 days",
-    encoding="utf-8",
-)
-
-log = logger
+    return val

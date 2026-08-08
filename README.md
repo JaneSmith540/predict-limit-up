@@ -1,6 +1,6 @@
 # 涨停预测策略 V1
 
-基于梯度提升集成模型（CatBoost + LightGBM + XGBoost）预测 A 股涨停，通过 vn.py 回测引擎进行全市场回测验证。
+基于梯度提升集成模型（CatBoost + LightGBM + XGBoost）预测 A 股涨停，通过 vn.py 回测引擎进行全市场回测验证。采用滚动重训机制，每4个月更新模型以适应市场变化。
 
 ## 快速开始
 
@@ -16,16 +16,16 @@ cp .env.example .env
 python -m backtest run
 ```
 
-回测结束后会自动在 `reports/` 下生成静态可视化报告（PDF + PNG 图表 + CSV 数据）。
+回测结束后会自动在 `reports/` 下生成静态可视化报告（HTML + PNG 图表 + CSV 数据）。
 
 ## 模型架构
 
-### 买入模型：梯度提升集成
+### 买入模型：梯度提升集成 + 滚动重训
 
 - **CatBoost + LightGBM + XGBoost** 线性加权概率平均（默认权重 1:1:1）
-- 预测：open(t+1) → open(t+max_holding+1) 收益 >= label_threshold 的概率
-- 训练数据：训练期内所有涨停股票的日线数据
-- 集成阈值：概率 >= 0.55 触发买入信号
+- 预测：open(t+1) -> open(t+max_holding+1) 收益 >= label_threshold 的概率
+- **滚动重训**：每4个月用最新数据重新训练模型，避免因子分布漂移导致信号消失
+- 选股策略：始终选择 Top N 股票，设最低概率下限 0.30 保证信号连续性
 
 ### 卖出模型（可选，默认禁用）
 
@@ -51,31 +51,37 @@ python -m backtest run
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `position_size` | 0.50 | 单仓位占总资金比例 |
+| `position_size` | 0.33 | 单仓位占总资金比例 |
 | `max_holding_days` | 3 | 最大持仓天数 |
 | `stop_loss` | -4% | 止损线 |
 | `take_profit` | 10% | 止盈线 |
-| `max_positions` | 2 | 最大同时持仓数 |
-| `predict_threshold` | 0.55 | 买入概率阈值 |
+| `max_positions` | 3 | 最大同时持仓数 |
+| `daily_pick` | 3 | 每日选股数量 |
+| `predict_threshold` | 0.40 | 买入概率阈值 |
 | `label_threshold` | 2.0% | 正样本收益门槛 |
 
-交易时序：t日收盘信号 → t+1日开盘成交
+交易时序：t日收盘信号 -> t+1日开盘成交
 
-## 最新回测结果
+## V1 最终版回测结果
 
-回测区间：2025-08-01 ~ 2026-08-04（244个交易日）
+回测区间：2025-08-01 ~ 2026-08-04
 
 | 指标 | 数值 |
 |------|------|
-| 年化收益率 | 15.16% |
-| 总收益率 | 15.43% |
-| 最大回撤 | -21.40% |
-| 夏普比率 | 0.65 |
-| 胜率 | 49.25% |
-| 总交易笔数 | 136 |
-| 盈亏比 | 1.20 |
+| 年化收益率 | 19.56% |
+| 总收益率 | 21.02% |
+| 最大回撤 | -34.01% |
+| 交易次数 | 293 |
+| Sharpe | 0.59 |
 
-详细报告见 `reports/` 目录。
+详细报告见 `reports/` 目录，包含：
+- 权益曲线（v1_equity_curve.png）
+- 回撤曲线（v1_drawdown.png）
+- 月度收益（v1_monthly_returns.png）
+- 交易盈亏分布（v1_trade_pnl.png）
+- 综合仪表板（v1_dashboard.png）
+- 统计指标表（v1_stats_table.png）
+- HTML综合报告（v1_final_report.html）
 
 ## 项目结构
 
@@ -84,23 +90,24 @@ predict-limit-up/
 ├── config.yaml              # 所有参数配置（模型/交易/回测）
 ├── .env.example             # 环境变量模板（复制为.env填token）
 ├── requirements.txt         # Python依赖
+├── _bootstrap.py            # 项目初始化
 ├── data_fetch/              # 数据获取（Tushare API + 本地缓存）
 ├── factors/                 # 因子计算（训练端 + 策略端）
 │   ├── __init__.py          # compute_factors() 训练端批量计算
 │   └── factor.py            # calculate_factors() 策略端实时计算
 ├── model/                   # 梯度提升集成模型
 │   └── __init__.py          # LimitUpModel + ExitModel
-├── strategies/              # vn.py 策略模板
-│   └── limit_up_strategy.py  # 双模型策略实现
+├── strategies/              # 策略模块
+│   ├── __init__.py          # LimitUpStrategy + Strategy
+│   └── limit_up_strategy.py  # vn.py 策略实现（滚动重训）
 ├── backtest/                # 回测引擎
-│   ├── __init__.py           # 全市场回测入口
+│   ├── __init__.py           # 全市场回测入口（滚动重训）
 │   ├── __main__.py           # CLI入口
 │   └── engine.py            # vn.py Tushare回测引擎
-├── visualization/           # 静态图表和PDF报告生成
-├── tests/                   # 测试
+├── visualization/           # 静态图表和HTML报告生成
 ├── utils/                   # 工具（配置加载 + 日志）
-├── reports/                 # 回测结果报告（PDF/PNG/CSV）
-└── logs/                    # 运行日志和收益曲线
+├── reports/                 # 回测结果报告（HTML/PNG）
+└── logs/                    # 运行日志和交易记录
 ```
 
 ## 配置说明
@@ -111,6 +118,15 @@ predict-limit-up/
 - **trading**: 仓位、止损止盈、持仓天数
 - **backtest**: 回测区间、训练区间、选股数量
 - **factors**: 启用的因子列表
+
+## 滚动重训机制
+
+V1版本引入滚动重训，解决静态模型在后期信号消失的问题：
+
+1. 将回测期分为3段（每4个月）
+2. 每段使用不同时间窗口的训练数据重新训练模型
+3. 策略根据当前日期自动选择对应模型
+4. 配合最低概率下限（0.30），确保信号持续生成
 
 ## 数据说明
 

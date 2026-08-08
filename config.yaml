@@ -1,5 +1,5 @@
 # ============================================================
-# 涨停预测策略 V2 — 高集中+大止盈
+# 涨停预测策略 V1 — 滚动重训版 (Round 3: 分散持仓)
 # ============================================================
 
 tushare:
@@ -9,8 +9,8 @@ backtest:
   start_date: "20250801"
   end_date: "20260804"
   train_start_date: "20240101"
-  daily_pick: 2
-  max_positions: 2
+  daily_pick: 3
+  max_positions: 3
   warmup_days: 30
 
 vnpy:
@@ -33,7 +33,7 @@ factors:
 model:
   train_ratio: 0.8
   label_threshold: 2.0
-  predict_threshold: 0.55
+  predict_threshold: 0.40
   exit_threshold: 0.0
 
   weights:
@@ -58,7 +58,7 @@ model:
 
 trading:
   initial_capital: 1000000
-  position_size: 0.50
+  position_size: 0.33
   max_holding_days: 3
   stop_loss: -0.04
   take_profit: 0.10
