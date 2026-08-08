@@ -1,18 +1,12 @@
 """
-全市场回测引擎（vn.py 版）
+全市场回测引擎（vn.py 版）— 双模型架构
 
 流程:
-  1. 获取训练数据，训练多元线性回归模型
-  2. 用 TushareBacktestingEngine 加载全市场数据为 vn.py BarData
-  3. 注入模型到 LimitUpStrategy
-  4. 运行 vn.py 回测引擎 (BacktestingEngine)
+  1. 训练 RF 买入模型 + RF 卖出模型
+  2. 用 TushareBacktestingEngine 加载全市场数据
+  3. 注入双模型到 LimitUpStrategy
+  4. 运行 vn.py 回测引擎
   5. 输出统计指标和交易记录
-
-交易时序: t日收盘信号 -> t+1日开盘成交（vn.py cross_limit_order 实现）
-
-用法:
-  python -m backtest run              # 全市场回测（vn.py 引擎）
-  python -m backtest run 000001.SZ     # 单股回测（兼容旧版）
 """
 import pandas as pd
 import matplotlib
@@ -25,7 +19,7 @@ from vnpy.trader.constant import Direction
 from utils import get_config, log
 from data_fetch import data
 from factors import compute_factors, get_factor_columns
-from model import LimitUpModel
+from model import LimitUpModel, ExitModel
 
 from backtest.engine import TushareBacktestingEngine
 from strategies.limit_up_strategy import LimitUpStrategy
@@ -34,11 +28,6 @@ RESULT_DIR = Path(__file__).parent.parent / "logs"
 
 
 def run_backtest(ts_code: str = None):
-    """
-    回测入口
-    - 不传 ts_code: 全市场回测 (vn.py 引擎)
-    - 传 ts_code: 单股回测 (兼容旧版自定义引擎)
-    """
     if ts_code:
         return _run_single(ts_code)
     else:
@@ -50,36 +39,37 @@ def _run_market():
     bt_start = get_config("backtest.start_date", "20250801")
     bt_end = get_config("backtest.end_date", "20260804")
     train_start = get_config("backtest.train_start_date", "20240101")
-    daily_pick = get_config("backtest.daily_pick", 3)
-    max_positions = get_config("backtest.max_positions", 3)
+    daily_pick = get_config("backtest.daily_pick", 2)
+    max_positions = get_config("backtest.max_positions", 2)
     initial_capital = get_config("trading.initial_capital", 1_000_000)
-    position_size = get_config("trading.position_size", 0.1)
-    stop_loss = get_config("trading.stop_loss", -0.05)
-    take_profit = get_config("trading.take_profit", 0.10)
-    max_holding_days = get_config("trading.max_holding_days", 5)
-    warmup_days = 20
+    position_size = get_config("trading.position_size", 0.35)
+    stop_loss = get_config("trading.stop_loss", -0.04)
+    take_profit = get_config("trading.take_profit", 0.08)
+    max_holding_days = get_config("trading.max_holding_days", 3)
+    warmup_days = get_config("backtest.warmup_days", 30)
 
     log.info("=" * 60)
-    log.info("全市场涨停预测回测（vn.py 引擎）")
+    log.info("全市场涨停预测回测（vn.py 引擎 + 双RF模型）")
     log.info(f"  训练数据: {train_start} ~ {bt_start}")
     log.info(f"  回测期间: {bt_start} ~ {bt_end}")
     log.info(f"  每日选股: {daily_pick} | 最大持仓数: {max_positions}")
     log.info(f"  交易时序: t日收盘信号 -> t+1日开盘成交")
     log.info("=" * 60)
 
-    # --- 1. 训练模型 ---
-    model = _train_model(train_start, bt_start)
+    # --- 1. 训练双模型 ---
+    entry_model, exit_model = _train_models(train_start, bt_start)
 
     # --- 2. 创建 vn.py 回测引擎 ---
     engine = TushareBacktestingEngine()
 
-    # --- 3. 加载全市场数据 (Tushare -> BarData) ---
+    # --- 3. 加载全市场数据 ---
     engine.load_tushare_data(bt_start, bt_end, warmup_days=warmup_days)
 
-    # --- 4. 设置市场参数 (手续费/滑点/乘数/最小跳动) ---
+    # --- 4. 设置市场参数 ---
     engine.setup_market_params(capital=initial_capital)
 
     # --- 5. 添加策略 ---
+    min_prob = get_config("model.predict_threshold", 0.45)
     setting = {
         "daily_pick": daily_pick,
         "max_positions": max_positions,
@@ -88,24 +78,41 @@ def _run_market():
         "max_holding_days": max_holding_days,
         "position_size": position_size,
         "initial_capital": initial_capital,
+        "min_prob": min_prob,
     }
     engine.add_strategy(LimitUpStrategy, setting)
 
-    # --- 6. 注入训练好的模型 ---
-    engine.strategy.model = model
-    log.info("模型已注入策略")
+    # --- 6. 注入双模型 ---
+    engine.strategy.model = entry_model
+    engine.strategy.exit_model = exit_model
+    log.info("买入模型 + 卖出模型 已注入策略")
 
-    # --- 7. 运行 vn.py 回测 ---
+    # --- 6.5 市场趋势过滤（可选）---
+    market_filter_enabled = get_config("trading.market_filter", False)
+    if market_filter_enabled:
+        market_ma = get_config("trading.market_ma", 10)
+        try:
+            index_df = data.get_index_daily("000300.SH", bt_start, bt_end)
+            index_df = index_df.sort_values("trade_date").reset_index(drop=True)
+            index_df["ma"] = index_df["close"].rolling(market_ma).mean()
+            index_df["above_ma"] = index_df["close"] > index_df["ma"]
+            trade_days = set(index_df[index_df["above_ma"]]["trade_date"].tolist())
+            engine.strategy.market_trade_days = trade_days
+            log.info(f"市场趋势过滤: {len(trade_days)}/{len(index_df)} 天允许交易")
+        except Exception as e:
+            log.warning(f"市场趋势过滤加载失败: {e}")
+
+    # --- 7. 运行回测 ---
     log.info("开始 vn.py 回测...")
     engine.run_backtesting()
 
-    # --- 8. 计算逐日盯市盈亏 ---
+    # --- 8. 计算盈亏 ---
     engine.calculate_result()
 
-    # --- 9. 计算统计指标 ---
+    # --- 9. 统计指标 ---
     stats = engine.calculate_statistics()
 
-    # --- 10. 输出交易记录和收益曲线 ---
+    # --- 10. 输出 ---
     _save_trades(engine, "全市场")
     _plot_equity_curve(engine, "全市场", initial_capital)
 
@@ -138,14 +145,14 @@ def _run_market():
     return engine
 
 
-def _train_model(train_start: str, bt_start: str) -> LimitUpModel:
-    """训练多元线性回归模型（与旧版逻辑一致）"""
+def _train_models(train_start: str, bt_start: str):
+    """训练买入模型 + 卖出模型"""
     log.info("收集训练用涨停股票...")
     limit_stocks = data.get_limit_list_range(train_start, bt_start)
     train_stock_pool = limit_stocks["ts_code"].unique().tolist()
     log.info(f"训练期涨停股票数: {len(train_stock_pool)}")
 
-    log.info("下载训练数据（这可能需要几分钟）...")
+    log.info("下载训练数据...")
     train_data = []
     for i, code in enumerate(train_stock_pool):
         try:
@@ -160,21 +167,29 @@ def _train_model(train_start: str, bt_start: str) -> LimitUpModel:
     train_df = pd.concat(train_data, ignore_index=True)
     log.info(f"训练数据总计: {len(train_df)} 条")
 
-    log.info("训练模型...")
-    model = LimitUpModel()
-    model.train(train_df)
+    # 训练买入模型
+    log.info("=" * 40)
+    entry_model = LimitUpModel()
+    entry_model.train(train_df)
 
-    return model
+    # 训练卖出模型（如果启用）
+    exit_threshold = get_config("model.exit_threshold", 0.0)
+    exit_model = ExitModel()
+    if exit_threshold > 0:
+        log.info("=" * 40)
+        exit_model.train(train_df)
+    else:
+        log.info("卖出模型已禁用(exit_threshold<=0)，跳过训练")
+
+    return entry_model, exit_model
 
 
-def _save_trades(engine: TushareBacktestingEngine, name: str):
-    """保存交易记录到 CSV"""
+def _save_trades(engine, name):
     trades = engine.get_all_trades()
     if not trades:
         log.info("无交易记录")
         return
 
-    # 将 vn.py TradeData 转为可读记录
     records = []
     for t in trades:
         records.append({
@@ -193,8 +208,7 @@ def _save_trades(engine: TushareBacktestingEngine, name: str):
     log.info(f"交易记录已保存: {csv_path} ({len(records)} 笔)")
 
 
-def _plot_equity_curve(engine: TushareBacktestingEngine, name: str, initial_capital: float):
-    """绘制收益曲线"""
+def _plot_equity_curve(engine, name, initial_capital):
     if engine.daily_df is None or len(engine.daily_df) == 0:
         log.info("无数据，无法绘制收益曲线")
         return
@@ -219,11 +233,11 @@ def _plot_equity_curve(engine: TushareBacktestingEngine, name: str, initial_capi
 
 
 # ============================================================
-# 单股回测（兼容旧版，使用自定义引擎）
+# 单股回测（兼容旧版）
 # ============================================================
 
 def _run_single(ts_code: str):
-    """单股回测（兼容旧版自定义引擎）"""
+    """单股回测（兼容旧版）"""
     import numpy as np
     from strategy import Strategy
 
@@ -232,8 +246,6 @@ def _run_single(ts_code: str):
     train_start = get_config("backtest.train_start_date", "20240101")
 
     log.info(f"=== 单股回测: {ts_code} ===")
-    log.info(f"  训练数据: {train_start} ~ {bt_start}")
-    log.info(f"  回测期间: {bt_start} ~ {bt_end}")
 
     log.info("下载日线数据...")
     df = data.get_daily(ts_code, train_start, bt_end)
@@ -284,7 +296,6 @@ def _run_single(ts_code: str):
                 "pnl": pnl,
                 "reason": sell_reason,
             })
-            log.info(f"卖出 {current_date} @ {sell_price:.2f} (开盘) | {sell_reason} | {pnl:.1%}")
             position = None
             pending_sell = False
 
@@ -300,7 +311,6 @@ def _run_single(ts_code: str):
                     "buy_date": current_date,
                     "holding_days": 0,
                 }
-                log.info(f"买入 {current_date} @ {buy_price:.2f} (开盘) | {shares}股 | 概率: {prob:.2f}")
             pending_buy = False
 
         if position is not None:
@@ -360,7 +370,6 @@ def _run_single(ts_code: str):
 
 
 def _print_single_results(name, trades, equity_curve, initial_capital):
-    """打印单股回测结果"""
     if not trades:
         log.info("无交易记录")
         return
@@ -395,11 +404,9 @@ def _print_single_results(name, trades, equity_curve, initial_capital):
 
     RESULT_DIR.mkdir(exist_ok=True)
     df_trades.to_csv(RESULT_DIR / f"trades_{name}.csv", index=False, encoding="utf-8-sig")
-    log.info(f"交易记录已保存: {RESULT_DIR / f'trades_{name}.csv'}")
 
 
 def _plot_single_equity(name, equity_curve, initial_capital):
-    """绘制单股收益曲线"""
     if not equity_curve:
         return
 
@@ -415,4 +422,3 @@ def _plot_single_equity(name, equity_curve, initial_capital):
     RESULT_DIR.mkdir(exist_ok=True)
     plt.savefig(RESULT_DIR / f"equity_{name}.png", dpi=150)
     plt.close()
-    log.info(f"收益曲线已保存: {RESULT_DIR / f'equity_{name}.png'}")

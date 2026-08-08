@@ -1,67 +1,69 @@
 # ============================================================
-# 涨停预测策略 V1 — 配置文件
-# 所有参数集中在这里，改参数不用改代码
+# 涨停预测策略 V2 — 高集中+大止盈
 # ============================================================
 
-# Tushare 配置（token 从 .env 读取，不写在这里）
 tushare:
   api_url: "https://api.tushare.pro"
 
-# 回测时间范围（回测期间：最近1年；训练数据会自动取回测期前的数据）
 backtest:
   start_date: "20250801"
   end_date: "20260804"
-  # 训练数据起始日期（往前取更长的数据训练，增加涨停样本）
   train_start_date: "20240101"
-  # 股票池：每天选预测概率最高的 N 只股票买入
-  daily_pick: 3
-  # 同时最多持仓数
-  max_positions: 3
-  # 预热天数（MA 因子需要历史数据）
-  warmup_days: 20
+  daily_pick: 2
+  max_positions: 2
+  warmup_days: 30
 
-# vn.py 回测引擎参数
 vnpy:
-  # 手续费率（单边万分之三）
   rate: 0.0003
-  # 滑点（元/股，0 表示无滑点）
   slippage: 0.0
-  # 合约乘数（股票为 1）
   size: 1.0
-  # 最小价格跳动（A 股 0.01 元）
   pricetick: 0.01
-  # 无风险利率
   risk_free: 0.0
-  # 年化天数
   annual_days: 240
 
-# 因子列表（搭档在这里添加新因子名称即可）
-# 当前只有 MA5 和 MA10，搭档可以继续加
 factors:
-  - ma5
-  - ma10
+  - momentum_5
+  - momentum_10
+  - ma5_bias
+  - ma10_bias
+  - volatility_5
+  - break_high_10
+  - rsi_14
 
-# 多元线性回归模型参数
 model:
-  # 训练/测试集划分比例
   train_ratio: 0.8
-  # 预测概率阈值：预测值 > 此阈值视为"预测涨停"
-  # 涨停是低概率事件，线性回归输出值偏低，阈值要低一些
-  predict_threshold: 0.05
+  label_threshold: 2.0
+  predict_threshold: 0.55
+  exit_threshold: 0.0
 
-# 交易规则
+  weights:
+    catboost: 1.0
+    lightgbm: 1.0
+    xgboost: 1.0
+
+  catboost:
+    iterations: 500
+    depth: 6
+    learning_rate: 0.05
+
+  lightgbm:
+    n_estimators: 500
+    max_depth: 6
+    learning_rate: 0.05
+
+  xgboost:
+    n_estimators: 500
+    max_depth: 6
+    learning_rate: 0.05
+
 trading:
-  # 初始资金
   initial_capital: 1000000
-  # 每次买入仓位比例（总资金的多少）
-  position_size: 0.1
-  # 最大持仓天数
-  max_holding_days: 5
-  # 止损比例（亏损达此比例卖出）
-  stop_loss: -0.05
-  # 止盈比例（盈利达此比例卖出）
+  position_size: 0.50
+  max_holding_days: 3
+  stop_loss: -0.04
   take_profit: 0.10
+  market_filter: false
+  market_ma: 10
 
-# 日志
 logging:
   level: "INFO"
