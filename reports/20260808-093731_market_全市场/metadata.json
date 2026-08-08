@@ -1,0 +1,59 @@
+{
+  "mode": "market",
+  "name": "全市场",
+  "generated_at": "2026-08-08T09:37:48",
+  "annual_days": 240,
+  "parameters": {
+    "backtest_start": "20250801",
+    "backtest_end": "20260804",
+    "train_start": "20240101",
+    "daily_pick": 2,
+    "max_positions": 2,
+    "initial_capital": 1000000,
+    "position_size": 0.5,
+    "stop_loss": -0.04,
+    "take_profit": 0.1,
+    "max_holding_days": 3,
+    "annual_days": 240
+  },
+  "cache_root": "D:\\predict-limit-up\\data_cache\\daily",
+  "round_trip": {
+    "unmatched_open_lots": 2,
+    "unmatched_close_volume": 0.0
+  },
+  "positions": {
+    "missing_price_observations": 421,
+    "forward_filled_price_observations": 0,
+    "fill_price_fallback_observations": 421,
+    "missing_cache_days": 241
+  },
+  "boundary": {
+    "requested_start": "2025-08-01",
+    "excluded_pre_start_days": 1,
+    "excluded_pre_start_trades": 0
+  },
+  "benchmarks": {
+    "requested": {
+      "沪深300": "000300.SH",
+      "中证500": "000905.SH"
+    },
+    "available": {
+      "沪深300": {
+        "code": "000300.SH",
+        "rows": 244,
+        "path": "D:\\predict-limit-up\\data_cache\\benchmarks\\000300.SH_20250801_20260804.parquet"
+      },
+      "中证500": {
+        "code": "000905.SH",
+        "rows": 244,
+        "path": "D:\\predict-limit-up\\data_cache\\benchmarks\\000905.SH_20250801_20260804.parquet"
+      }
+    },
+    "missing": [],
+    "errors": {}
+  },
+  "data_range": {
+    "start": "2025-08-01",
+    "end": "2026-08-04"
+  }
+}

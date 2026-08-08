@@ -8,7 +8,6 @@ venv/
 .ipynb_checkpoints/
 logs/
 data_cache/
-reports/
 *.db
 *.log
 model/*.pkl

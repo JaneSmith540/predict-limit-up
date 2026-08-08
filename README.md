@@ -1,6 +1,6 @@
-# 涨停预测策略 V1
+# 涨停预测策略 V2
 
-用多元线性回归预测 A 股涨停。
+基于梯度提升集成模型（CatBoost + LightGBM + XGBoost）预测 A 股涨停，通过 vn.py 回测引擎进行全市场回测验证。
 
 ## 快速开始
 
@@ -10,42 +10,111 @@ pip install -r requirements.txt
 
 # 2. 配置 Tushare token
 cp .env.example .env
-# 编辑 .env，填入你的 Tushare token
+# 编辑 .env，填入你的 Tushare token: TUSHARE_TOKEN=your_token_here
 
-# 3. 运行回测
-python -m backtest run 000001.SZ
+# 3. 运行全市场回测
+python -m backtest run
 ```
 
-回测结束后会自动在 `reports/` 下生成一份静态报告。报告包含独立 PNG 图表、
-汇总 PDF、标准化每日结果、成交记录、FIFO 配对交易、每日持仓、指标和运行元数据。
-全市场报告使用沪深300和中证500作为基准；基准数据缓存在
-`data_cache/benchmarks/`。生成结果和缓存均不会进入 Git。
+回测结束后会自动在 `reports/` 下生成静态可视化报告（PDF + PNG 图表 + CSV 数据）。
 
-报告只对已有回测结果做后处理，不参与模型预测、选股、买卖、仓位或撮合。
+## 模型架构
 
-PDF 依次覆盖绩效总览、风险诊断、月度收益、每日交易活动、完整交易结果、
-持仓与资金使用、贡献与集中度，以及最多 10 只重点股票的交易时间线。
-报告口径如下：
+### 买入模型：梯度提升集成
 
-- 收益按日复合，年化统一使用 240 个交易日；策略与基准在首个共同有效日归零。
-- 报告按配置中的回测起始日截断，预热数据不计入收益、交易或图表。
-- 完整交易按股票 FIFO 配对，未平仓标为 `open_at_end`，不计入胜率和交易分布。
-- 停牌或缺失收盘价使用前一可得收盘价，使用次数会写入 `metadata.json`。
-- 基准网络请求失败时优先使用缓存；缓存也不可用时仍生成报告并明确标注缺失。
+- **CatBoost + LightGBM + XGBoost** 线性加权概率平均（默认权重 1:1:1）
+- 预测：open(t+1) → open(t+max_holding+1) 收益 >= label_threshold 的概率
+- 训练数据：训练期内所有涨停股票的日线数据
+- 集成阈值：概率 >= 0.55 触发买入信号
+
+### 卖出模型（可选，默认禁用）
+
+- 同样使用梯度提升集成
+- 持仓期间每日评估，预测次日上涨概率极低时提前卖出
+- 通过 `config.yaml` 中 `model.exit_threshold > 0` 启用
+
+## 因子体系（7个无量纲因子）
+
+| 因子 | 说明 |
+|------|------|
+| `momentum_5` | 5日动量收益率 |
+| `momentum_10` | 10日动量收益率 |
+| `ma5_bias` | 收盘价相对MA5偏离度 |
+| `ma10_bias` | 收盘价相对MA10偏离度 |
+| `volatility_5` | 5日变异系数（波动率/均值） |
+| `break_high_10` | 相对10日新高突破比率 |
+| `rsi_14` | 14日RSI |
+
+所有因子基于 t-1 收盘价计算，不含当日信息，无未来数据泄漏。因子均为无量纲指标，支持跨股票比较。
+
+## 交易规则
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `position_size` | 0.50 | 单仓位占总资金比例 |
+| `max_holding_days` | 3 | 最大持仓天数 |
+| `stop_loss` | -4% | 止损线 |
+| `take_profit` | 10% | 止盈线 |
+| `max_positions` | 2 | 最大同时持仓数 |
+| `predict_threshold` | 0.55 | 买入概率阈值 |
+| `label_threshold` | 2.0% | 正样本收益门槛 |
+
+交易时序：t日收盘信号 → t+1日开盘成交
+
+## 最新回测结果
+
+回测区间：2025-08-01 ~ 2026-08-04（244个交易日）
+
+| 指标 | 数值 |
+|------|------|
+| 年化收益率 | 15.16% |
+| 总收益率 | 15.43% |
+| 最大回撤 | -21.40% |
+| 夏普比率 | 0.65 |
+| 胜率 | 49.25% |
+| 总交易笔数 | 136 |
+| 盈亏比 | 1.20 |
+
+详细报告见 `reports/` 目录。
 
 ## 项目结构
 
 ```
-predict_limit-up/
-├── config.yaml          # 所有参数配置
-├── .env.example         # 环境变量模板（复制为.env填token）
-├── data_fetch/          # 数据获取（Tushare封装）
-├── factors/             # 因子计算（★ 搭档负责这里加因子）
-├── model/               # 多元线性回归模型
-├── strategy/            # 买卖策略（止损/止盈/仓位）
-├── backtest/            # 回测引擎
-├── visualization/       # 静态图表、指标和PDF报告
-├── utils/               # 工具（配置加载+日志）
-└── logs/                # 输出日志和收益曲线
+predict-limit-up/
+├── config.yaml              # 所有参数配置（模型/交易/回测）
+├── .env.example             # 环境变量模板（复制为.env填token）
+├── requirements.txt         # Python依赖
+├── data_fetch/              # 数据获取（Tushare API + 本地缓存）
+├── factors/                 # 因子计算（训练端 + 策略端）
+│   ├── __init__.py          # compute_factors() 训练端批量计算
+│   └── factor.py            # calculate_factors() 策略端实时计算
+├── model/                   # 梯度提升集成模型
+│   └── __init__.py          # LimitUpModel + ExitModel
+├── strategies/              # vn.py 策略模板
+│   └── limit_up_strategy.py  # 双模型策略实现
+├── backtest/                # 回测引擎
+│   ├── __init__.py           # 全市场回测入口
+│   ├── __main__.py           # CLI入口
+│   └── engine.py            # vn.py Tushare回测引擎
+├── visualization/           # 静态图表和PDF报告生成
+├── tests/                   # 测试
+├── utils/                   # 工具（配置加载 + 日志）
+├── reports/                 # 回测结果报告（PDF/PNG/CSV）
+└── logs/                    # 运行日志和收益曲线
 ```
 
+## 配置说明
+
+所有参数集中在 `config.yaml`，无需修改代码即可调整：
+
+- **model**: 模型类型、权重、超参数、阈值
+- **trading**: 仓位、止损止盈、持仓天数
+- **backtest**: 回测区间、训练区间、选股数量
+- **factors**: 启用的因子列表
+
+## 数据说明
+
+- 数据源：Tushare Pro API
+- 训练数据：训练期内所有涨停股票（约2000+只）
+- 回测数据：全市场A股日线数据（约5500+只）
+- 本地缓存：首次下载后缓存到 `data_cache/`，后续运行直接读取
