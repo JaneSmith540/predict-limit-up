@@ -1,4 +1,4 @@
-# 涨停预测策略 V2
+# 涨停预测策略 V1
 
 基于梯度提升集成模型（CatBoost + LightGBM + XGBoost）预测 A 股涨停，通过 vn.py 回测引擎进行全市场回测验证。
 
