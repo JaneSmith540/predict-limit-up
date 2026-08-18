@@ -12,6 +12,7 @@ from vnpy_portfoliostrategy import StrategyTemplate
 
 from factors import get_factor_columns
 from factors.factor import calculate_factors
+from utils import is_one_word_limit_up
 
 
 class LimitUpStrategy(StrategyTemplate):
@@ -178,6 +179,14 @@ class LimitUpStrategy(StrategyTemplate):
                 continue
             bar = bars.get(vt_symbol)
             if not bar:
+                continue
+            # 跳过「一字涨停」：开盘即封死、全天无成交，现实中买不进去，
+            # 回测默认可买会高估收益，故在买入前过滤。
+            hist = self.close_history.get(vt_symbol)
+            pre_close = hist[-1] if hist else None
+            if is_one_word_limit_up(bar.open_price, bar.high_price,
+                                    bar.low_price, bar.close_price, pre_close):
+                self.write_log("跳过一字涨停(不可买) " + vt_symbol)
                 continue
             buy_amount = self.initial_capital * self.position_size
             shares = int(buy_amount / bar.close_price / 100) * 100
