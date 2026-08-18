@@ -6,12 +6,13 @@ import numpy as np
 import pandas as pd
 from collections import defaultdict
 
-from vnpy.trader.constant import Interval, Direction
+from vnpy.trader.constant import Interval
 from vnpy.trader.object import BarData
 from vnpy_portfoliostrategy import StrategyTemplate
 
 from factors import get_factor_columns
 from factors.factor import calculate_factors
+from utils import is_one_word_limit_up
 
 
 class LimitUpStrategy(StrategyTemplate):
@@ -62,10 +63,13 @@ class LimitUpStrategy(StrategyTemplate):
         self.write_log("策略停止")
 
     def calculate_price(self, vt_symbol, direction, reference):
-        if direction == Direction.LONG:
-            return reference * 1.1
-        else:
-            return reference * 0.9
+        # 撮合委托价 = 传入的参考价（当前 bar 收盘）。
+        # rebalance_portfolio 以 bar.close_price 作为 reference 调用本方法；
+        # vn.py 在 trade_on_close=False（默认）时，会在下一根 K 线开盘价成交，
+        # 恰好符合策略注释的 "t日收盘信号 -> t+1日开盘成交" 语义。
+        # 原先 return reference * 1.1 / 0.9 会把买入限价抬高 10%，
+        # 使撮合价失真（并非真实开盘价），故移除放大系数、原样返回参考价。
+        return reference
 
     def _get_active_model(self, current_date):
         """根据当前日期选择对应的模型"""
@@ -178,6 +182,14 @@ class LimitUpStrategy(StrategyTemplate):
                 continue
             bar = bars.get(vt_symbol)
             if not bar:
+                continue
+            # 跳过「一字涨停」：开盘即封死、全天无成交，现实中买不进去，
+            # 回测默认可买会高估收益，故在买入前过滤。
+            hist = self.close_history.get(vt_symbol)
+            pre_close = hist[-1] if hist else None
+            if is_one_word_limit_up(bar.open_price, bar.high_price,
+                                    bar.low_price, bar.close_price, pre_close):
+                self.write_log("跳过一字涨停(不可买) " + vt_symbol)
                 continue
             buy_amount = self.initial_capital * self.position_size
             shares = int(buy_amount / bar.close_price / 100) * 100
