@@ -60,6 +60,20 @@ def limit_up_price(pre_close, board="main"):
     return round(pre_close * (1 + ratio), 2)
 
 
+def is_limit_up(close_p, pre_close, tol=0.02):
+    """判断收盘价 ``close_p`` 是否封死在任意板块涨停价（板块无关）。
+
+    仅看收盘价是否落在主板/创业板·科创板/ST 任一档涨停候选价上，
+    不要求「一字」（盘中可曾打开）。可与 is_one_word_limit_up 组合：
+    is_limit_up 判定涨停、is_one_word_limit_up 进一步排除买不进的一字板。
+
+    tol: 价格比较容差（元）。
+    """
+    if pre_close is None or pre_close <= 0:
+        return False
+    return any(abs(close_p - c) <= tol for c in limit_up_candidates(pre_close, tol))
+
+
 def is_one_word_limit_up(open_p, high_p, low_p, close_p, pre_close, tol=0.02):
     """判断某根日 K 是否为「一字涨停」板。
 
