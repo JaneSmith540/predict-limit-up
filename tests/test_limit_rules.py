@@ -1,6 +1,6 @@
 import unittest
 
-from utils import is_one_word_limit_up
+from utils import is_one_word_limit_up, limit_up_price
 
 
 class TestOneWordLimitUp(unittest.TestCase):
@@ -31,6 +31,20 @@ class TestOneWordLimitUp(unittest.TestCase):
     def test_limit_down_not_flagged(self):
         # 跌停一字板不应被当成涨停
         self.assertFalse(is_one_word_limit_up(9.0, 9.0, 9.0, 9.0, 10.0))
+
+
+class TestLimitUpPrice(unittest.TestCase):
+    def test_limit_up_price_boards(self):
+        # 前收 10.00：ST 10.50 / 主板 11.00 / 创业板·科创板 12.00
+        self.assertEqual(limit_up_price(10.0, "st"), 10.5)
+        self.assertEqual(limit_up_price(10.0, "main"), 11.0)
+        self.assertEqual(limit_up_price(10.0, "chinext"), 12.0)
+        self.assertEqual(limit_up_price(10.0, "star"), 12.0)
+        self.assertEqual(limit_up_price(10.0), 11.0)  # 默认主板
+
+    def test_limit_up_price_unknown_board_defaults_main(self):
+        # 未知板块名回退到主板 +10%
+        self.assertEqual(limit_up_price(10.0, "unknown"), 11.0)
 
 
 if __name__ == "__main__":
