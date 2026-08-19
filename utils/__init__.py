@@ -45,6 +45,21 @@ def limit_up_candidates(pre_close, tol=0.02):
     """返回 ``pre_close`` 在各板块对应的涨停候选价（保留两位小数）。"""
     return [round(pre_close * m, 2) for m in _LIMIT_UP_RATIOS]
 
+
+# 板块名 -> 涨停幅度（与 _LIMIT_UP_RATIOS 保持一致）
+_BOARD_LIMIT_UP = {"st": 0.05, "main": 0.10, "chinext": 0.20, "star": 0.20}
+
+
+def limit_up_price(pre_close, board="main"):
+    """返回 ``board`` 板块、前收 ``pre_close`` 对应的涨停价（保留两位小数）。
+
+    board 取值：st / main / chinext(创业板) / star(科创板)，默认 main。
+    供买入过滤之外按板块精确定价时复用，纯函数、无副作用。
+    """
+    ratio = _BOARD_LIMIT_UP.get(str(board).lower(), 0.10)
+    return round(pre_close * (1 + ratio), 2)
+
+
 def is_one_word_limit_up(open_p, high_p, low_p, close_p, pre_close, tol=0.02):
     """判断某根日 K 是否为「一字涨停」板。
 
