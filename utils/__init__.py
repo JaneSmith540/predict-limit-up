@@ -74,6 +74,20 @@ def is_limit_up(close_p, pre_close, tol=0.02):
     return any(abs(close_p - c) <= tol for c in limit_up_candidates(pre_close, tol))
 
 
+def is_limit_down(close_p, pre_close, tol=0.02):
+    """判断收盘价 ``close_p`` 是否封死在任意板块跌停价（板块无关）。
+
+    与 is_limit_up 对称，仅看收盘价是否落在主板/创业板·科创板/ST
+    任一档跌停候选价上，不要求「一字」。
+
+    tol: 价格比较容差（元）。
+    """
+    if pre_close is None or pre_close <= 0:
+        return False
+    down_candidates = [round(pre_close * m, 2) for m in (0.95, 0.90, 0.80)]
+    return any(abs(close_p - c) <= tol for c in down_candidates)
+
+
 def is_one_word_limit_up(open_p, high_p, low_p, close_p, pre_close, tol=0.02):
     """判断某根日 K 是否为「一字涨停」板。
 

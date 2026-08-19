@@ -1,6 +1,6 @@
 import unittest
 
-from utils import is_one_word_limit_up, limit_up_price, is_limit_up
+from utils import is_one_word_limit_up, limit_up_price, is_limit_up, is_limit_down
 
 
 class TestOneWordLimitUp(unittest.TestCase):
@@ -62,6 +62,16 @@ class TestIsLimitUp(unittest.TestCase):
 
     def test_is_limit_up_invalid_preclose(self):
         self.assertFalse(is_limit_up(11.0, 0))
+
+
+class TestIsLimitDown(unittest.TestCase):
+    def test_is_limit_down_main(self):
+        # 前收 10.00，主板跌停于 9.00
+        self.assertTrue(is_limit_down(9.0, 10.0))
+
+    def test_is_limit_down_not_reached(self):
+        # 仅跌 3%（未封任何板块跌停价）不算跌停
+        self.assertFalse(is_limit_down(9.7, 10.0))
 
 
 if __name__ == "__main__":
